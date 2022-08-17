@@ -11,6 +11,32 @@
 #include <ATen/ATen.h>
 #include <torch/torch.h>
 
+
+torch::Tensor sigmoid_from_scratch(torch::Tensor input_tensor){
+    return 1 / (1 + torch::exp(-input_tensor));
+}
+
+torch::Tensor binary_cross_entropy_from_scratch(torch::Tensor ground_truth, torch::Tensor prediction){
+    torch::Tensor l = (1 - ground_truth) * torch::log(1 - prediction + 1e-8) + ground_truth * torch::log(prediction + 1e-8);
+    return -1 * torch::mean(l);
+}
+
+// https://github.com/facebookresearch/fvcore/blob/main/fvcore/nn/focal_loss.py
+torch::Tensor sigmoid_focal_loss(torch::Tensor input_tensor, torch::Tensor target_tensor, float alpha, float gamma){
+    torch::Tensor p = sigmoid_from_scratch(input_tensor);
+    torch::Tensor ce_loss = binary_cross_entropy_from_scratch(target_tensor, input_tensor);
+    
+    torch::Tensor p_t = p * target_tensor + (1 - p) * (1 - target_tensor);
+    torch::Tensor loss = ce_loss * torch::pow((1 - p_t), gamma);
+
+    if (alpha >= 0){
+        torch::Tensor alpha_t = alpha * target_tensor + (1 - alpha) * (1 - target_tensor);
+        loss = alpha_t * loss;
+    }
+
+    return loss.mean(0);
+}
+
 int main() {
     // set seed
     int seed = 42;
@@ -77,5 +103,17 @@ int main() {
     std::cout << "ReLU:\n" << tensor4.relu() << "\n" << std::endl;
     std::cout << "Sigmoid:\n" << tensor4.sigmoid() << "\n" << std::endl;
     std::cout << "Tanh:\n" << tensor4.tanh() << "\n" << std::endl;
+
+    // Example
+    std::cout << "Sigmoid from scratch:\n" << sigmoid_from_scratch(tensor4) << "\n" << std::endl;
+
+    torch::Tensor ground_truth = torch::tensor({1.0, 1.0, 0.0});
+    torch::Tensor predictions1 = torch::tensor({1.0, 1.0, 0.0});
+    torch::Tensor predictions2 = torch::tensor({1.0, 0.9, 0.0});
+    torch::Tensor predictions3 = torch::tensor({1.0, 0.1, 0.0});
+
+    std::cout << "Focal Loss pred 1: " << sigmoid_focal_loss(ground_truth, predictions1, 0.5, 2) << std::endl;
+    std::cout << "Focal Loss pred 2: " << sigmoid_focal_loss(ground_truth, predictions2, 0.5, 2) << std::endl;
+    std::cout << "Focal Loss pred 3: " << sigmoid_focal_loss(ground_truth, predictions3, 0.5, 2) << std::endl;
 
 }
